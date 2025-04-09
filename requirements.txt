@@ -10,6 +10,7 @@ requests>=2.31.0
 # Web Scraping
 beautifulsoup4>=4.12.2
 selenium>=4.15.2
+webdriver-manager>=4.0.1
 
 # LLM Integration
 google-generativeai

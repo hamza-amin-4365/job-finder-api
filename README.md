@@ -1,6 +1,6 @@
 # Job Finder API
 
-FastAPI service that aggregates job postings from well-known sources and returns them in JSON format.
+#### FastAPI service that aggregates job postings from well-known sources and returns them in JSON format.
 
 ## Quick Start
 
