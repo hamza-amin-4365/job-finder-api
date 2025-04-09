@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API keys and configurations
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  
+
 
 RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "70.0"))  # Minimum score to consider a job relevant
 
