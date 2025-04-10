@@ -9,7 +9,7 @@ from app.config import USER_AGENT, REQUEST_TIMEOUT, SCRAPING_DELAY
 # LinkedIn search URL
 BASE_URL = "https://www.linkedin.com/jobs/search"
 
-async def fetch_jobs(request: JobSearchRequest) -> List[JobListing]:
+async def fetch_linkedin_jobs(request: JobSearchRequest) -> List[JobListing]:
     """
     Fetch job listings from LinkedIn based on the search criteria
     """
@@ -19,14 +19,20 @@ async def fetch_jobs(request: JobSearchRequest) -> List[JobListing]:
     params = build_search_params(request)
     
     # Fetch initial page to get total results
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True, cookies={}) as client:
         headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "max-age=0",
+    }
         
         try:
+            first_response = await client.get(BASE_URL, headers=headers)
+            first_response.raise_for_status()
             response = await client.get(BASE_URL, params=params, headers=headers)
             response.raise_for_status()
             
@@ -48,7 +54,7 @@ async def fetch_jobs(request: JobSearchRequest) -> List[JobListing]:
             # Fetch additional pages if available
             for page in range(2, max_pages + 1):
                 # Respect LinkedIn's rate limiting
-                await asyncio.sleep(SCRAPING_DELAY)
+                await asyncio.sleep(SCRAPING_DELAY * 2)
                 
                 # Update page parameter
                 page_params = params.copy()
