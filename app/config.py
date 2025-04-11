@@ -7,6 +7,7 @@ load_dotenv()
 # API keys and configurations
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  
+SCRAPERAPI_API_KEY = os.getenv("SCRAPERAPI_API_KEY")
 
 
 RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "70.0"))  # Minimum score to consider a job relevant

@@ -10,7 +10,7 @@ Job Finder API is an intelligent job aggregation service that fetches job listin
 
 ## ✨ Features
 
-- **Multi-source Job Aggregation**: Collects job listings from LinkedIn and Indeed (Glassdoor coming soon)
+- **Multi-source Job Aggregation**: Collects job listings from LinkedIn Indeed and Glassdoor
 - **AI-Powered Relevance Filtering**: Uses Google's Gemini AI to match jobs to your profile
 - **Customizable Search**: Filter by position, experience, salary, job type, location, and skills
 - **RESTful API**: Simple and consistent API endpoints with FastAPI
