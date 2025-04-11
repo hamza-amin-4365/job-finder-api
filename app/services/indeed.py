@@ -91,6 +91,17 @@ def _convert_to_job_listing(item: dict, request: JobSearchRequest) -> Optional[J
         if job_nature == "Not specified" and request.jobNature:
             job_nature = request.jobNature
         
+        
+        # print few jobs for debugging purposes
+        print("--------Indeed job----------")
+        print(f"Job Title: {item.get('positionName', 'Not specified')}")
+        print(f"Company: {item.get('company', 'Not specified')}")
+        print(f"Location: {item.get('location', 'Not specified')}")
+        print(f"Experience: {request.experience}")
+        print(f"Salary: {item.get('salary', request.salary or 'Not specified')}")
+        print(f"Apply Link: {item.get('url', '')}")
+        print("-" * 50)
+
         # Map fields to JobListing schema
         return JobListing(
             job_title=item.get("positionName", "Not specified"),

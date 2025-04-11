@@ -9,7 +9,7 @@
 pip install -r requirements.txt
 
 # Run the server
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 
 ```
 
@@ -21,3 +21,15 @@ uvicorn main:app --reload
 ## License
 
 Apache License 2.0
+
+## Test the api
+```
+{
+  "position": "Frontend Developer",
+  "experience": "2 years",
+  "salary": "150000",
+  "jobNature": "onsite",
+  "location": "Lahore, Pakistan",
+  "skills": "ReactJS< HTML, CSS"
+}
+```
