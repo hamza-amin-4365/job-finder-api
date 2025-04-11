@@ -1,137 +1,164 @@
 import google.generativeai as genai
 import asyncio
 import json
-from typing import List, Dict, Any
+from typing import List
 from app.models.schemas import JobSearchRequest, JobListing
-from app.config import GEMINI_API_KEY, RELEVANCE_THRESHOLD
+from app.config import GEMINI_API_KEY
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.0-flash-lite')
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-async def filter_relevant_jobs(request: JobSearchRequest, jobs: List[JobListing]) -> List[JobListing]:
-    """
-    Filter jobs by relevance using a single Gemini API call
-    """
+
+async def filter_relevant_jobs(
+    request: JobSearchRequest, jobs: List[JobListing]
+) -> List[JobListing]:
+    print("\n=== STARTING LLM FILTERING ===")
+    print(f"Received {len(jobs)} jobs to filter")
+
+    if not jobs:
+        print("No jobs to filter!")
+        return []
+
+    if len(jobs) <= 3:
+        print(f"Few jobs ({len(jobs)}), skipping LLM filter")
+        return jobs
+
+    try:
+        # Build candidate profile
+        candidate_profile = {
+            "position": request.position,
+            "experience": request.experience,
+            "skills": request.skills,
+            "preferences": {
+                "job_nature": request.jobNature or "Any",
+                "location": request.location or "Any",
+                "salary": request.salary or "Flexible",
+            },
+        }
+
+        # Prepare job listings
+        job_listings = []
+        for idx, job in enumerate(jobs, 1):
+            job_listings.append(
+                {
+                    "job_number": idx,
+                    "title": job.job_title,
+                    "company": job.company,
+                    "experience": job.experience,
+                    "location": job.location,
+                    "job_nature": job.jobNature or "Not specified",
+                }
+            )
+
+        # Create prompt
+        prompt = f"""
+        [SYSTEM PROMPT]
+        You are a job matching expert. Analyze this candidate profile and job listings.
+        Return ONLY a JSON array of relevant job numbers like [1,3,5].
+
+        [CANDIDATE PROFILE]
+        {json.dumps(candidate_profile, indent=2)}
+
+        [JOB LISTINGS]
+        {json.dumps(job_listings, indent=2)}
+
+        [RULES]
+        1. Match position titles and skills
+        2. Consider experience level
+        3. Location match gets priority
+        4. Include partial matches
+        5. Select at least 3 jobs
+        6. Return ONLY the array
+        """
+
+        print("\n=== PROMPT SENT TO LLM ===")
+        print(prompt[:2000] + "\n... [truncated]")  # Print first 2000 chars
+
+        # Get LLM response
+        print("\nAwaiting LLM response...")
+        response = await asyncio.to_thread(model.generate_content, prompt)
+        response_text = response.text.strip()
+
+        print("\n=== RAW LLM RESPONSE ===")
+        print(response_text)
+
+        # Parse response
+        try:
+            print("\nAttempting to parse response...")
+            start_idx = response_text.find("[")
+            end_idx = response_text.find("]")
+
+            if start_idx == -1 or end_idx == -1:
+                print("❗ No array found in response")
+                raise ValueError("No array found")
+
+            json_text = response_text[start_idx : end_idx + 1]
+            print(f"Extracted JSON text: {json_text}")
+
+            relevant_indices = json.loads(json_text)
+            print(f"Parsed indices: {relevant_indices}")
+
+            if not isinstance(relevant_indices, list):
+                print("❗ Response is not a list")
+                raise ValueError("Invalid response format")
+
+            # Convert to 0-based indices
+            valid_indices = []
+            for idx in relevant_indices:
+                if isinstance(idx, int) and 1 <= idx <= len(jobs):
+                    valid_indices.append(idx - 1)
+                else:
+                    print(f"⚠️ Invalid index skipped: {idx}")
+
+            print(f"Valid indices after conversion: {valid_indices}")
+
+            if not valid_indices:
+                print("⚠️ No valid indices, using fallback")
+                return keyword_matching_fallback(request, jobs)
+
+            filtered_jobs = [jobs[i] for i in valid_indices if i < len(jobs)]
+            print(f"\n=== FINAL FILTERED JOBS ({len(filtered_jobs)}) ===")
+            for job in filtered_jobs:
+                print(f"- {job.job_title} | {job.company}")
+
+            return filtered_jobs
+
+        except Exception as parse_error:
+            print(f"\n❗ PARSING ERROR: {str(parse_error)}")
+            print("Attempting keyword fallback...")
+            return keyword_matching_fallback(request, jobs)
+
+    except Exception as e:
+        print(f"\n❗ GENERAL ERROR: {str(e)}")
+        return keyword_matching_fallback(request, jobs)
+
+
+def keyword_matching_fallback(
+    request: JobSearchRequest, jobs: List[JobListing]
+) -> List[JobListing]:
+    print("\n=== KEYWORD FALLBACK ACTIVATED ===")
     if not jobs:
         return []
     
-    # If we have 5 or fewer jobs, consider all relevant to avoid API call
-    if len(jobs) <= 5:
-        print("Small number of jobs found - skipping LLM filtering")
-        return jobs
-        
-    try:
-        # Create candidate profile section
-        candidate_profile = f"""
-        Candidate Profile:
-        - Position seeking: {request.position}
-        - Experience: {request.experience}
-        - Required skills: {request.skills}
-        - Preferred job nature: {request.jobNature if request.jobNature else 'Any'}
-        - Preferred location: {request.location if request.location else 'Any'}
-        - Expected salary: {request.salary if request.salary else 'Not specified'}
-        """
-        
-        # Create job listings section
-        job_details = []
-        for i, job in enumerate(jobs):
-            job_details.append(f"""
-            Job #{i+1}:
-            - Title: {job.job_title}
-            - Company: {job.company}
-            - Experience: {job.experience}
-            - Job nature: {job.jobNature if job.jobNature else 'Not specified'}
-            - Location: {job.location}
-            - Salary: {job.salary if job.salary else 'Not specified'}
-            """)
-        
-        job_listings = "\n".join(job_details)
-        
-        # Complete prompt
-        prompt = f"""
-        You are an expert job matching assistant. Here's a candidate profile and {len(jobs)} job listings.
-        Your task is to identify which jobs are most relevant for this candidate.
-
-        {candidate_profile}
-
-        {job_listings}
-
-        Evaluate each job's relevance to the candidate profile.
-        A job is considered relevant if:
-        1. The job title matches or is related to the position the candidate is seeking
-        2. The experience requirements match the candidate's experience
-        3. The skills required overlap with the candidate's skills
-        4. The job nature and location match the candidate's preferences (if specified)
-
-        RESPOND WITH A VALID JSON ARRAY containing only the job numbers that are relevant:
-        [1, 3, 5] (example showing jobs #1, #3, and #5 are relevant)
-        """
-        
-        # Make a single API call
-        print(f"Making a single LLM call to evaluate {len(jobs)} jobs")
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
-        
-        # Extract JSON array from response
-        # First clean up the response to get just the JSON part
-        if '```' in response_text:
-            # Extract JSON from code block
-            json_text = response_text.split('```')[1]
-            if json_text.startswith('json'):
-                json_text = json_text[4:].strip()
-        else:
-            # Try to find square brackets for the array
-            start_idx = response_text.find('[')
-            end_idx = response_text.rfind(']')
-            if start_idx != -1 and end_idx != -1:
-                json_text = response_text[start_idx:end_idx+1]
-            else:
-                json_text = response_text
-        
-        try:
-            # Parse JSON array
-            relevant_indices = json.loads(json_text)
-            # Convert to 0-based indices and ensure they're in range
-            relevant_indices = [idx-1 for idx in relevant_indices if isinstance(idx, int) and 1 <= idx <= len(jobs)]
-            
-            # Return the relevant jobs
-            return [jobs[idx] for idx in relevant_indices]
-            
-        except json.JSONDecodeError as e:
-            print(f"Error parsing JSON response: {e}")
-            print(f"Response text: {response_text}")
-            # Fallback to keyword matching
-            return keyword_matching_fallback(request, jobs)
-            
-    except Exception as e:
-        print(f"Error in LLM filtering: {str(e)}")
-        # Fallback to simple keyword matching
-        return keyword_matching_fallback(request, jobs)
-
-def keyword_matching_fallback(request: JobSearchRequest, jobs: List[JobListing]) -> List[JobListing]:
-    """
-    Fallback method using basic keyword matching when LLM is unavailable
-    """
-    print("Using keyword matching fallback")
-    relevant_jobs = []
-    
-    # Extract keywords from request
+    # Extract keywords
     keywords = set()
     keywords.update(request.position.lower().split())
-    keywords.update(request.skills.lower().split(','))
-    keywords = {k.strip() for k in keywords if len(k.strip()) > 2}
+    keywords.update(kw.strip().lower() for kw in request.skills.split(','))
     
+    # Score jobs
+    scored = []
     for job in jobs:
-        # Create a job text combining all fields
-        job_text = f"{job.job_title} {job.company} {job.experience} {job.jobNature or ''} {job.location}"
-        job_text = job_text.lower()
+        job_text = f"{job.job_title} {job.company} {job.location}".lower()
+        score = sum(1 for kw in keywords if kw in job_text)
         
-        # Count matching keywords
-        matches = sum(1 for keyword in keywords if keyword in job_text)
-        
-        # Consider relevant if at least 30% of keywords match
-        if matches >= max(1, len(keywords) * 0.3):
-            relevant_jobs.append(job)
+        # Bonus for location match
+        if request.location and request.location.lower() in job.location.lower():
+            score += 2
+            
+        scored.append((score, job))
     
-    return relevant_jobs
+    # Sort and return top 50% or min 3 jobs
+    scored.sort(reverse=True, key=lambda x: x[0])
+    keep = max(3, len(scored) // 2)
+    return [job for (score, job) in scored[:keep]]

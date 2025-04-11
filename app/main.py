@@ -29,12 +29,12 @@ async def search_jobs(request: JobSearchRequest):
     try:
         # Fetch jobs from different sources
         linkedin_jobs = await linkedin.fetch_linkedin_jobs(request)
-        # indeed_jobs = await indeed.fetch_jobs(request)
+        indeed_jobs = await indeed.fetch_jobs(request)
         # glassdoor_jobs = await glassdoor.fetch_jobs(request)
         
         # Combine all job listings
-        all_jobs = linkedin_jobs
-        
+        all_jobs = linkedin_jobs + indeed_jobs
+        print(all_jobs)
         # Filter jobs by relevance using LLM
         relevant_jobs = await filter_relevant_jobs(request, all_jobs)
         

@@ -80,7 +80,7 @@ class LinkedInScraper:
     def _scrape_jobs_sync(self, request: JobSearchRequest) -> List[JobListing]:
         all_jobs = []
         start = 0
-        max_jobs = 15  # Default limit
+        max_jobs = 10  # Default limit
 
         while len(all_jobs) < max_jobs:
             try:
