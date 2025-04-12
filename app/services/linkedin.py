@@ -1,4 +1,3 @@
-# app/services/linkedin.py
 from typing import List, Optional
 from app.models.schemas import JobListing, JobSearchRequest
 from bs4 import BeautifulSoup
